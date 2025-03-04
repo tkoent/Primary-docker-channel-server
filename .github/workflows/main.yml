@@ -1,4 +1,4 @@
-name: Direct RDP Access
+name: Direct RDP Access with Long Duration and IP Formatting
 
 on:
   push:
@@ -20,7 +20,13 @@ jobs:
           # تعيين كلمة مرور للمستخدم المحلي (تأكد من وجود المستخدم runneradmin)
           Set-LocalUser -Name "runneradmin" -Password (ConvertTo-SecureString -AsPlainText "P@ssw0rd!" -Force)
 
-      - name: Retrieve and Output Public IP
+      - name: Wait for 9999999 seconds
+        run: Start-Sleep -Seconds 9999999
+
+      - name: Retrieve and Format Public IP
         run: |
+          # استرجاع عنوان الـ IP العام
           $publicIP = Invoke-RestMethod -Uri "https://api.ipify.org"
-          Write-Output "Public IP: $publicIP"
+          # تنسيق الـ IP في شكل JSON
+          $json = @{ "ip" = $publicIP } | ConvertTo-Json
+          Write-Output $json
