@@ -27,9 +27,15 @@ jobs:
           # تثبيت localtunnel باستخدام npm
           npm install -g localtunnel
 
+      - name: Print IPv4 Address
+        run: |
+          # طباعة عنوان IPv4 الخاص بالجهاز
+          $ipv4 = (Get-NetIPAddress -AddressFamily IPv4 | Where-Object {$_.InterfaceAlias -eq "Ethernet"} | Select-Object -First 1).IPAddress
+          Write-Output "IPv4 Address: $ipv4"
+
       - name: Start Localtunnel for RDP
         run: |
-          # تشغيل النفق باستخدام localtunnel على المنفذ 3389 بدون كلمة مرور
+          # تشغيل النفق باستخدام localtunnel على المنفذ 3389
           npx localtunnel --port 3389
           # الانتظار حتى يبدأ النفق
           Start-Sleep -Seconds 10
