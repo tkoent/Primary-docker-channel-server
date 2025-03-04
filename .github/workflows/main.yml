@@ -1,31 +1,26 @@
-name: CI
+name: Direct RDP Access
 
-on: [push, workflow_dispatch]
+on:
+  push:
+  workflow_dispatch:
 
 jobs:
-  build:
+  setup:
     runs-on: windows-latest
 
     steps:
-    - name: Download Cloudflare Tunnel
-      run: |
-        Invoke-WebRequest -Uri https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe -OutFile cloudflared.exe
+      - name: Enable Remote Desktop and Configure Firewall
+        run: |
+          # تمكين Remote Desktop
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
+          # تفعيل قواعد جدار الحماية الخاصة بـ Remote Desktop
+          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+          # تمكين المصادقة عبر الشبكة (NLA)
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
+          # تعيين كلمة مرور للمستخدم المحلي (تأكد من وجود المستخدم runneradmin)
+          Set-LocalUser -Name "runneradmin" -Password (ConvertTo-SecureString -AsPlainText "P@ssw0rd!" -Force)
 
-    - name: Start RDP Service
-      run: |
-        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
-        Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
-        net user runneradmin "P@ssw0rd!" /add
-
-    - name: Start Cloudflare Tunnel
-      run: |
-        Start-Process -NoNewWindow -FilePath .\cloudflared.exe -ArgumentList "tunnel --url rdp://localhost:3389" -RedirectStandardOutput tunnel.log
-        Start-Sleep -Seconds 10
-        Get-Content tunnel.log | Select-String -Pattern "https://.*trycloudflare.com" | ForEach-Object { $_.Matches.Value } | Out-File -Encoding utf8 tunnel_url.txt
-
-    - name: Print Cloudflare RDP URL
-      run: Get-Content tunnel_url.txt
-
-    - name: Keep alive
-      run: timeout /t 9999999
+      - name: Retrieve and Output Public IP
+        run: |
+          $publicIP = Invoke-RestMethod -Uri "https://api.ipify.org"
+          Write-Output "Public IP: $publicIP"
