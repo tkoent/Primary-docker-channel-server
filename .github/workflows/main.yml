@@ -1,53 +1,44 @@
-name: Direct RDP Access with Cloudflare Tunnel
+name: Temporary RDP Tunnel with ngrok
 
 on:
   push:
   workflow_dispatch:
 
 jobs:
-  setup:
+  tunnel:
     runs-on: windows-latest
-
-    env:
-      # يجب إنشاء سر في GitHub باسم CLOUDFLARED_HOSTNAME يحتوي على اسم النطاق المُهيأ (مثلاً: rdp.example.com)
-      CLOUDFLARED_HOSTNAME: ${{ secrets.CLOUDFLARED_HOSTNAME }}
 
     steps:
       - name: Enable Remote Desktop and Configure Firewall
         run: |
-          # تمكين Remote Desktop
+          # تمكين RDP وتكوين جدار الحماية للسماح بالاتصال
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
-          # تفعيل قواعد جدار الحماية الخاصة بـ Remote Desktop
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-          # تمكين المصادقة عبر الشبكة (NLA)
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
-          # تعيين كلمة مرور للمستخدم المحلي
           Set-LocalUser -Name "runneradmin" -Password (ConvertTo-SecureString -AsPlainText "P@ssw0rd!" -Force)
-
-      - name: Download Cloudflared
+      
+      - name: Download ngrok
         run: |
-          Invoke-WebRequest "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe" -OutFile cloudflared.exe
-
-      - name: Create Cloudflare Tunnel Credentials File
+          Invoke-WebRequest https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip -OutFile ngrok.zip
+      
+      - name: Extract ngrok
+        run: Expand-Archive ngrok.zip
+      
+      - name: Authenticate ngrok
+        run: .\ngrok\ngrok.exe authtoken $Env:NGROK_AUTH_TOKEN
         env:
-          # يجب إنشاء سر في GitHub باسم CLOUDFLARED_CREDENTIALS يحتوي على محتوى ملف بيانات الاعتماد الذي تحصل عليه من Cloudflare
-          CLOUDFLARED_CREDENTIALS: ${{ secrets.CLOUDFLARED_CREDENTIALS }}
+          NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
+      
+      - name: Start ngrok Tunnel for RDP and Retrieve URL
         run: |
-          echo "$env:CLOUDFLARED_CREDENTIALS" | Out-File -Encoding ascii cloudflared.json
-
-      - name: Create Cloudflare Tunnel Config File
-        run: |
-          @"
-          tunnel: mytunnel
-          credentials-file: cloudflared.json
-          ingress:
-            - hostname: $env:CLOUDFLARED_HOSTNAME
-              service: tcp://localhost:3389
-            - service: http_status:404
-          "@ | Out-File -Encoding ascii config.yml
-
-      - name: Start Cloudflare Tunnel for RDP
-        run: .\cloudflared.exe tunnel --config config.yml run
-
-      - name: Wait for 2147483 seconds
+          # تشغيل النفق في الخلفية على منفذ 3389
+          Start-Process -FilePath ".\ngrok\ngrok.exe" -ArgumentList "tcp", "3389" -WindowStyle Hidden
+          # الانتظار قليلاً للسماح للنفق بالبدء
+          Start-Sleep -Seconds 10
+          # استرجاع رابط النفق العام من واجهة ngrok المحلية
+          $tunnels = Invoke-RestMethod -Uri http://127.0.0.1:4040/api/tunnels
+          $publicUrl = $tunnels.tunnels[0].public_url
+          Write-Output "Temporary Tunnel URL: $publicUrl"
+      
+      - name: Keep Tunnel Alive
         run: Start-Sleep -Seconds 2147483
