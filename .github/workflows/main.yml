@@ -1,4 +1,4 @@
-name: Temporary RDP Tunnel with ngrok
+name: Temporary RDP Tunnel with Localtunnel
 
 on:
   push:
@@ -11,46 +11,34 @@ jobs:
     steps:
       - name: Enable Remote Desktop and Configure Firewall
         run: |
+          # تمكين RDP وتكوين جدار الحماية للسماح بالاتصال
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
           Set-LocalUser -Name "runneradmin" -Password (ConvertTo-SecureString -AsPlainText "P@ssw0rd!" -Force)
       
-      - name: Download and Extract ngrok
+      - name: Install Node.js and Localtunnel
         run: |
-          Invoke-WebRequest https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip -OutFile ngrok.zip
-          Expand-Archive ngrok.zip
+          # تثبيت Node.js لتثبيت localtunnel
+          Invoke-WebRequest https://nodejs.org/dist/v16.15.0/node-v16.15.0-x64.msi -OutFile nodejs.msi
+          Start-Process msiexec.exe -ArgumentList '/i', 'nodejs.msi', '/quiet', '/norestart' -Wait
+          Remove-Item nodejs.msi
+          
+          # تثبيت localtunnel باستخدام npm
+          npm install -g localtunnel
 
-      - name: Authenticate ngrok
-        run: .\ngrok\ngrok.exe authtoken $Env:NGROK_AUTH_TOKEN
-        env:
-          NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
-
-      - name: Start ngrok Tunnel in Background
+      - name: Start Localtunnel for RDP
         run: |
-          Start-Job -ScriptBlock {
-            Start-Process -NoNewWindow -FilePath ".\ngrok\ngrok.exe" -ArgumentList "tcp", "3389"
-          }
-          Start-Sleep -Seconds 10  # انتظر حتى يبدأ النفق
+          # تشغيل النفق باستخدام localtunnel على المنفذ 3389
+          Start-Process -NoNewWindow -FilePath "lt" -ArgumentList "--port", "3389"
+          # الانتظار حتى يبدأ النفق
+          Start-Sleep -Seconds 10
 
-      - name: Retrieve ngrok Tunnel URL
+      - name: Retrieve Localtunnel URL
         run: |
-          # الانتظار حتى يكون النفق جاهزًا
-          $timeout = 30
-          $elapsed = 0
-          while ($elapsed -lt $timeout) {
-            try {
-              $tunnels = Invoke-RestMethod -Uri "http://127.0.0.1:4040/api/tunnels" -ErrorAction Stop
-              $publicUrl = $tunnels.tunnels[0].public_url
-              Write-Output "Temporary Tunnel URL: $publicUrl"
-              exit 0
-            } catch {
-              Start-Sleep -Seconds 2
-              $elapsed += 2
-            }
-          }
-          Write-Output "ngrok tunnel failed to start."
-          exit 1
-
+          # استخراج رابط localtunnel
+          $tunnelUrl = (Get-Content "C:\Users\RunnerAdmin\AppData\Local\Temp\localtunnel.log" | Select-String -Pattern "yourname.loca.lt").Line
+          Write-Output "Temporary Tunnel URL: $tunnelUrl"
+      
       - name: Keep Tunnel Alive
         run: Start-Sleep -Seconds 2147483
