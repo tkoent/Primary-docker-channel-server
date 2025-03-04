@@ -29,15 +29,15 @@ jobs:
 
       - name: Start Localtunnel for RDP
         run: |
-          # تشغيل النفق باستخدام localtunnel على المنفذ 3389 باستخدام npx
-          npx localtunnel --port 3389 --subdomain yoursubdomain
+          # تشغيل النفق باستخدام localtunnel على المنفذ 3389 بدون كلمة مرور
+          npx localtunnel --port 3389
           # الانتظار حتى يبدأ النفق
           Start-Sleep -Seconds 10
 
       - name: Retrieve Localtunnel URL
         run: |
           # استخراج رابط localtunnel من سجل العملية
-          $tunnelUrl = (Get-Content "C:\Users\RunnerAdmin\AppData\Local\Temp\localtunnel.log" | Select-String -Pattern "yoursubdomain.loca.lt").Line
+          $tunnelUrl = (Get-Content "C:\Users\RunnerAdmin\AppData\Local\Temp\localtunnel.log" | Select-String -Pattern "loca.lt").Line
           Write-Output "Temporary Tunnel URL: $tunnelUrl"
       
       - name: Keep Tunnel Alive
