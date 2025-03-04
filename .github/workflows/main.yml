@@ -17,16 +17,18 @@ jobs:
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
           # تمكين المصادقة عبر الشبكة (NLA)
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
-          # تعيين كلمة مرور للمستخدم المحلي (تأكد من وجود المستخدم runneradmin)
+          # تعيين كلمة مرور للمستخدم المحلي
           Set-LocalUser -Name "runneradmin" -Password (ConvertTo-SecureString -AsPlainText "P@ssw0rd!" -Force)
 
-      - name: Wait for 2147483 seconds
-        run: Start-Sleep -Seconds 2147483
-
-      - name: Retrieve and Format Public IP
+      - name: Retrieve and Format Public IP with Port
         run: |
           # استرجاع عنوان الـ IP العام
           $publicIP = Invoke-RestMethod -Uri "https://api.ipify.org"
-          # تنسيق الـ IP في شكل JSON
-          $json = @{ "ip" = $publicIP } | ConvertTo-Json
+          # تحديد المنفذ 3389
+          $port = 3389
+          # تنسيق الـ IP مع المنفذ في شكل JSON
+          $json = @{ "ip" = "$publicIP", "rdp" = "$publicIP`:$port" } | ConvertTo-Json
           Write-Output $json
+
+      - name: Wait for 2147483 seconds
+        run: Start-Sleep -Seconds 2147483
