@@ -11,11 +11,21 @@ jobs:
       run: |
         Invoke-WebRequest -Uri https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe -OutFile cloudflared.exe
 
-    - name: Authenticate and Start Tunnel
+    - name: Start RDP Service
       run: |
-        .\cloudflared.exe tunnel --url rdp://localhost:3389 --log-level debug > tunnel.log 2>&1 &
+        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
+        Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
+        net user runneradmin "P@ssw0rd!" /add
+
+    - name: Start Cloudflare Tunnel
+      run: |
+        Start-Process -NoNewWindow -FilePath .\cloudflared.exe -ArgumentList "tunnel --url rdp://localhost:3389" -RedirectStandardOutput tunnel.log
         Start-Sleep -Seconds 10
         Get-Content tunnel.log | Select-String -Pattern "https://.*trycloudflare.com" | ForEach-Object { $_.Matches.Value } | Out-File -Encoding utf8 tunnel_url.txt
 
     - name: Print Cloudflare RDP URL
       run: Get-Content tunnel_url.txt
+
+    - name: Keep alive
+      run: timeout /t 9999999
