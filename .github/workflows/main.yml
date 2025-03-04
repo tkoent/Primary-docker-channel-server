@@ -11,34 +11,46 @@ jobs:
     steps:
       - name: Enable Remote Desktop and Configure Firewall
         run: |
-          # تمكين RDP وتكوين جدار الحماية للسماح بالاتصال
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
           Set-LocalUser -Name "runneradmin" -Password (ConvertTo-SecureString -AsPlainText "P@ssw0rd!" -Force)
       
-      - name: Download ngrok
+      - name: Download and Extract ngrok
         run: |
           Invoke-WebRequest https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip -OutFile ngrok.zip
-      
-      - name: Extract ngrok
-        run: Expand-Archive ngrok.zip
-      
+          Expand-Archive ngrok.zip
+
       - name: Authenticate ngrok
         run: .\ngrok\ngrok.exe authtoken $Env:NGROK_AUTH_TOKEN
         env:
           NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
-      
-      - name: Start ngrok Tunnel for RDP and Retrieve URL
+
+      - name: Start ngrok Tunnel in Background
         run: |
-          # تشغيل النفق في الخلفية على منفذ 3389
-          Start-Process -FilePath ".\ngrok\ngrok.exe" -ArgumentList "tcp", "3389" -WindowStyle Hidden
-          # الانتظار قليلاً للسماح للنفق بالبدء
-          Start-Sleep -Seconds 10
-          # استرجاع رابط النفق العام من واجهة ngrok المحلية
-          $tunnels = Invoke-RestMethod -Uri http://127.0.0.1:4040/api/tunnels
-          $publicUrl = $tunnels.tunnels[0].public_url
-          Write-Output "Temporary Tunnel URL: $publicUrl"
-      
+          Start-Job -ScriptBlock {
+            Start-Process -NoNewWindow -FilePath ".\ngrok\ngrok.exe" -ArgumentList "tcp", "3389"
+          }
+          Start-Sleep -Seconds 10  # انتظر حتى يبدأ النفق
+
+      - name: Retrieve ngrok Tunnel URL
+        run: |
+          # الانتظار حتى يكون النفق جاهزًا
+          $timeout = 30
+          $elapsed = 0
+          while ($elapsed -lt $timeout) {
+            try {
+              $tunnels = Invoke-RestMethod -Uri "http://127.0.0.1:4040/api/tunnels" -ErrorAction Stop
+              $publicUrl = $tunnels.tunnels[0].public_url
+              Write-Output "Temporary Tunnel URL: $publicUrl"
+              exit 0
+            } catch {
+              Start-Sleep -Seconds 2
+              $elapsed += 2
+            }
+          }
+          Write-Output "ngrok tunnel failed to start."
+          exit 1
+
       - name: Keep Tunnel Alive
         run: Start-Sleep -Seconds 2147483
