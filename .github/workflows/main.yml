@@ -1,4 +1,4 @@
-name: Direct RDP Access with Long Duration and IP Formatting
+name: Direct RDP Access with Cloudflare Tunnel
 
 on:
   push:
@@ -7,6 +7,10 @@ on:
 jobs:
   setup:
     runs-on: windows-latest
+
+    env:
+      # يجب إنشاء سر في GitHub باسم CLOUDFLARED_HOSTNAME يحتوي على اسم النطاق المُهيأ (مثلاً: rdp.example.com)
+      CLOUDFLARED_HOSTNAME: ${{ secrets.CLOUDFLARED_HOSTNAME }}
 
     steps:
       - name: Enable Remote Desktop and Configure Firewall
@@ -20,15 +24,30 @@ jobs:
           # تعيين كلمة مرور للمستخدم المحلي
           Set-LocalUser -Name "runneradmin" -Password (ConvertTo-SecureString -AsPlainText "P@ssw0rd!" -Force)
 
-      - name: Retrieve and Format Public IP with Port
+      - name: Download Cloudflared
         run: |
-          # استرجاع عنوان الـ IP العام
-          $publicIP = Invoke-RestMethod -Uri "https://api.ipify.org"
-          # تحديد المنفذ 3389
-          $port = 3389
-          # تنسيق الـ IP مع المنفذ في شكل JSON
-          $json = @{ "ip" = "$publicIP", "rdp" = "$publicIP`:$port" } | ConvertTo-Json
-          Write-Output $json
+          Invoke-WebRequest "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe" -OutFile cloudflared.exe
+
+      - name: Create Cloudflare Tunnel Credentials File
+        env:
+          # يجب إنشاء سر في GitHub باسم CLOUDFLARED_CREDENTIALS يحتوي على محتوى ملف بيانات الاعتماد الذي تحصل عليه من Cloudflare
+          CLOUDFLARED_CREDENTIALS: ${{ secrets.CLOUDFLARED_CREDENTIALS }}
+        run: |
+          echo "$env:CLOUDFLARED_CREDENTIALS" | Out-File -Encoding ascii cloudflared.json
+
+      - name: Create Cloudflare Tunnel Config File
+        run: |
+          @"
+          tunnel: mytunnel
+          credentials-file: cloudflared.json
+          ingress:
+            - hostname: $env:CLOUDFLARED_HOSTNAME
+              service: tcp://localhost:3389
+            - service: http_status:404
+          "@ | Out-File -Encoding ascii config.yml
+
+      - name: Start Cloudflare Tunnel for RDP
+        run: .\cloudflared.exe tunnel --config config.yml run
 
       - name: Wait for 2147483 seconds
         run: Start-Sleep -Seconds 2147483
