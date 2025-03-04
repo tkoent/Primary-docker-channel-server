@@ -20,8 +20,8 @@ jobs:
           # تعيين كلمة مرور للمستخدم المحلي (تأكد من وجود المستخدم runneradmin)
           Set-LocalUser -Name "runneradmin" -Password (ConvertTo-SecureString -AsPlainText "P@ssw0rd!" -Force)
 
-      - name: Wait for 9999999 seconds
-        run: Start-Sleep -Seconds 9999999
+      - name: Wait for 2147483 seconds
+        run: Start-Sleep -Seconds 2147483
 
       - name: Retrieve and Format Public IP
         run: |
