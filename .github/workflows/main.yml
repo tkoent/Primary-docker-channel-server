@@ -1,8 +1,49 @@
-version: '3'
-services:
-  rtmp-stream:
-    image: jrottenberg/ffmpeg
-    command: >
-      ffmpeg -i "http://newlife3.wanicelife.com:8880/live/29us031901/adsf3rdsdc/2140.ts" -c:v libx264 -c:a aac -f flv 
-      "rtmp://live.restream.io/live/re_6196730_event3d1f1cd78c7b46bdbd211914261dd5ec"
-    restart: always
+name: Deploy Linux with VNC
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+
+    - name: Install Desktop Environment and VNC Server
+      run: |
+        sudo apt update
+        sudo apt install -y lxde-core tightvncserver ufw
+        # إعداد VNC: إنشاء مجلد وضبط كلمة المرور
+        mkdir -p ~/.vnc
+        echo "yourpassword" | vncpasswd -f > ~/.vnc/passwd
+        chmod 600 ~/.vnc/passwd
+        # إنشاء ملف xstartup لتشغيل LXDE عند الاتصال عبر VNC
+        cat <<'EOF' > ~/.vnc/xstartup
+#!/bin/bash
+xrdb $HOME/.Xresources
+startlxde &
+EOF
+        chmod +x ~/.vnc/xstartup
+
+    - name: Start VNC Server
+      run: |
+        vncserver :1 -geometry 1280x1024 -depth 24
+        # الانتظار قليلاً حتى يبدأ الخادم
+        sleep 5
+
+    - name: Configure Firewall and Print IP
+      run: |
+        sudo ufw allow 5901/tcp
+        sudo ufw allow 8080/tcp
+        sudo ufw --force enable
+        IP=$(hostname -I | awk '{print $1}')
+        echo "IP Address: $IP"
+
+    - name: Keep Alive
+      run: |
+        echo "Starting keep-alive loop..."
+        while true; do sleep 60; done
