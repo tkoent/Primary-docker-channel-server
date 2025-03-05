@@ -1,50 +1,6 @@
-name: Temporary RDP Tunnel with Localtunnel
-
-on:
-  push:
-  workflow_dispatch:
-
-jobs:
-  tunnel:
-    runs-on: windows-latest
-
-    steps:
-      - name: Enable Remote Desktop and Configure Firewall
-        run: |
-          # تمكين RDP وتكوين جدار الحماية للسماح بالاتصال
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
-          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
-          Set-LocalUser -Name "runneradmin" -Password (ConvertTo-SecureString -AsPlainText "P@ssw0rd!" -Force)
-      
-      - name: Install Node.js and Localtunnel
-        run: |
-          # تثبيت Node.js لتثبيت localtunnel
-          Invoke-WebRequest https://nodejs.org/dist/v16.15.0/node-v16.15.0-x64.msi -OutFile nodejs.msi
-          Start-Process msiexec.exe -ArgumentList '/i', 'nodejs.msi', '/quiet', '/norestart' -Wait
-          Remove-Item nodejs.msi
-          
-          # تثبيت localtunnel باستخدام npm
-          npm install -g localtunnel
-
-      - name: Print IPv4 Address
-        run: |
-          # طباعة عنوان IPv4 الخاص بالجهاز
-          $ipv4 = (Get-NetIPAddress -AddressFamily IPv4 | Where-Object {$_.InterfaceAlias -eq "Ethernet"} | Select-Object -First 1).IPAddress
-          Write-Output "IPv4 Address: $ipv4"
-
-      - name: Start Localtunnel for RDP
-        run: |
-          # تشغيل النفق باستخدام localtunnel على المنفذ 3389
-          npx localtunnel --port 3389
-          # الانتظار حتى يبدأ النفق
-          Start-Sleep -Seconds 10
-
-      - name: Retrieve Localtunnel URL
-        run: |
-          # استخراج رابط localtunnel من سجل العملية
-          $tunnelUrl = (Get-Content "C:\Users\RunnerAdmin\AppData\Local\Temp\localtunnel.log" | Select-String -Pattern "loca.lt").Line
-          Write-Output "Temporary Tunnel URL: $tunnelUrl"
-      
-      - name: Keep Tunnel Alive
-        run: Start-Sleep -Seconds 2147483
+version: '3'
+services:
+  url_checker:
+    image: curlimages/curl
+    command: >
+      curl --head --silent --fail "http://newlife3.wanicelife.com:8880/live/29us031901/adsf3rdsdc/2140.ts" || echo "الرابط غير متاح"
